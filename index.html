@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Turbo Dash: Obstacle Racer</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; background:#0d1b12; overflow:hidden; font-family:'Trebuchet MS',Verdana,sans-serif; }
+  #wrap { position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+  #game { display:block; background:#2f7a3d; touch-action:none; }
+  .overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; color:#fff; background:rgba(6,20,10,.82); padding:20px; z-index:5; }
+  .hidden { display:none !important; }
+  h1 { font-size:clamp(30px,7vw,52px); letter-spacing:2px; color:#ffd23f; text-shadow:0 3px 0 #c0392b, 0 6px 14px rgba(0,0,0,.6); font-style:italic; }
+  h1 span { color:#37e08b; }
+  h2 { font-size:clamp(22px,5vw,34px); color:#ffd23f; margin-bottom:10px; }
+  p.sub { color:#cfe8d4; margin:8px 0 18px; font-size:clamp(14px,3.4vw,18px); max-width:420px; line-height:1.45; }
+  .btn { display:block; width:min(280px,80vw); margin:8px auto; padding:14px 18px; font-size:19px; font-weight:800;
+    font-family:inherit; color:#12210f; background:linear-gradient(#ffe45e,#ffb400); border:0; border-radius:14px;
+    cursor:pointer; box-shadow:0 4px 0 #a86e00, 0 6px 14px rgba(0,0,0,.4); }
+  .btn:active { transform:translateY(3px); box-shadow:0 1px 0 #a86e00; }
+  .btn.alt { background:linear-gradient(#8ef0b6,#2fbf71); box-shadow:0 4px 0 #14663a, 0 6px 14px rgba(0,0,0,.4); color:#062b16; }
+  .btn.ghost { background:#243b2c; color:#e8f5e9; box-shadow:0 4px 0 #101f14; }
+  .howto { text-align:left; max-width:420px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.25);
+    border-radius:12px; padding:14px 18px; margin:10px 0 16px; font-size:15px; line-height:1.65; color:#eaf7ee; }
+  .howto b { color:#ffd23f; }
+  .stat { font-size:18px; margin:4px 0; color:#fff; }
+  .stat b { color:#ffd23f; }
+  #topbar { position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; padding:8px; z-index:6; pointer-events:none; }
+  #topbar button { pointer-events:auto; width:44px; height:44px; font-size:20px; border-radius:12px; border:2px solid rgba(255,255,255,.5);
+    background:rgba(0,0,0,.55); color:#fff; cursor:pointer; }
+  #levelPill { align-self:center; background:rgba(0,0,0,.55); color:#ffd23f; font-weight:800; padding:8px 14px; border-radius:20px; font-size:15px; }
+  .stars { font-size:34px; letter-spacing:6px; color:#ffd23f; margin:6px 0; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="480" height="720"></canvas>
+
+  <div id="topbar" class="hidden">
+    <button id="pauseBtn" title="Pause (P)">&#10074;&#10074;</button>
+    <div id="levelPill">RACE 1 / 20</div>
+    <button id="muteBtn" title="Mute (M)">&#128266;</button>
+  </div>
+
+  <div id="menu" class="overlay">
+    <h1>TURBO <span>DASH</span></h1>
+    <p class="sub"><b>Obstacle Racer</b> — a one-thumb top-down racer.<br>
+    Hold to accelerate, steer through the curves, dodge the spinning
+    barriers, hit the ramps, and beat your rivals to the finish line.<br>
+    20 races. Under a minute each. Instant restarts.</p>
+    <button class="btn" id="startBtn">▶ START RACE 1</button>
+    <button class="btn alt" id="howBtn">HOW TO PLAY</button>
+    <button class="btn ghost" id="continueBtn" style="display:none">CONTINUE — RACE <span id="contLvl"></span></button>
+    <p class="sub" style="font-size:13px;margin-top:14px">Best score: <span id="bestScore">0</span> &nbsp;•&nbsp; Best race: <span id="bestRace">—</span></p>
+  </div>
+
+  <div id="howto" class="overlay hidden">
+    <h2>HOW TO PLAY</h2>
+    <div class="howto">
+      <b>GO:</b> Hold <b>UP / SPACE</b>, or press-and-hold the road — your car accelerates while you hold.<br>
+      <b>STEER:</b> <b>LEFT / RIGHT</b> arrows (or A / D), or drag your finger / mouse toward the side you want.<br>
+      <b>SPINNING BARRIERS:</b> striped bars that sweep the road — hitting one costs a wrench and slows you down.<br>
+      <b>RAMPS:</b> yellow chevron pads — drive over them for a speed boost + 50 pts.<br>
+      <b>RIVALS:</b> 3 rival cars per race. Overtake one for +100 pts. They get faster every race.<br>
+      <b>OFF-ROAD:</b> grass slows you down — stay on the asphalt.<br>
+      <b>WIN A RACE:</b> reach the chequered line before the 60-second clock runs out.<br>
+      <b>WRENCHES:</b> you have 3 per race. Lose all 3 and the race is over — retry instantly.<br>
+      <b>PAUSE:</b> P or the ❚❚ button. <b>MUTE:</b> M or the speaker button.
+    </div>
+    <button class="btn" id="howBackBtn">GOT IT — RACE!</button>
+  </div>
+
+  <div id="levelDone" class="overlay hidden">
+    <h2 id="ldTitle">RACE COMPLETE!</h2>
+    <div class="stars" id="ldStars">★★★</div>
+    <p class="stat">Finish: <b id="ldPos">1st</b> &nbsp;•&nbsp; Time: <b id="ldTime">0.0s</b></p>
+    <p class="stat">Race points: <b id="ldPts">0</b> &nbsp;•&nbsp; Total score: <b id="ldScore">0</b></p>
+    <p class="stat" id="ldNext"></p>
+    <button class="btn" id="nextBtn">NEXT RACE ▶</button>
+    <button class="btn ghost" id="ldMenuBtn">MAIN MENU</button>
+  </div>
+
+  <div id="gameOver" class="overlay hidden">
+    <h2 id="goTitle">RACE OVER</h2>
+    <p class="sub" id="goMsg">Out of wrenches!</p>
+    <p class="stat">Score: <b id="goScore">0</b> &nbsp;•&nbsp; Reached race <b id="goLevel">1</b> of 20</p>
+    <button class="btn" id="retryBtn">↻ RETRY RACE</button>
+    <button class="btn ghost" id="goMenuBtn">MAIN MENU</button>
+  </div>
+
+  <div id="winScreen" class="overlay hidden">
+    <h2>🏁 CHAMPION! 🏁</h2>
+    <div class="stars">★★★</div>
+    <p class="sub">You conquered all 20 races of Turbo Dash!<br>
+    Spinning barriers, hairpins, ramps and rivals — you beat them all.</p>
+    <p class="stat">Final score: <b id="winScore">0</b></p>
+    <button class="btn" id="againBtn">↻ RACE AGAIN FROM RACE 1</button>
+    <button class="btn ghost" id="winMenuBtn">MAIN MENU</button>
+  </div>
+
+  <div id="paused" class="overlay hidden">
+    <h2>PAUSED</h2>
+    <p class="sub">Take a breath. The rivals are waiting.</p>
+    <button class="btn" id="resumeBtn">▶ RESUME</button>
+    <button class="btn alt" id="restartBtn">↻ RESTART RACE</button>
+    <button class="btn ghost" id="pauseMenuBtn">MAIN MENU</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+   TURBO DASH: OBSTACLE RACER — original game, vanilla JS/Canvas.
+   No copied art, code, names or assets. All art is drawn with
+   canvas primitives; all audio is synthesized with WebAudio.
+   ============================================================ */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = 480, H = 720;
+const PLAYER_Y = 560;          // player screen Y (fixed, world scrolls)
+const ROAD_HALF = 118;         // half road width in px
+const TOTAL_LEVELS = 20;
+const RACE_TIME = 60;          // seconds per race
+
+// ---------- persistent bests ----------
+let best = { score: 0, race: 0 };
+try { const s = JSON.parse(localStorage.getItem('turboDashBest') || 'null'); if (s) best = s; } catch (e) {}
+function saveBest() { try { localStorage.setItem('turboDashBest', JSON.stringify(best)); } catch (e) {} }
+
+// ---------- audio (all synthesized, original) ----------
+let AC = null, muted = false, musicTimer = null, engineOsc = null, engineGain = null;
+function audio() {
+  if (!AC) {
+    try {
+      AC = new (window.AudioContext || window.webkitAudioContext)();
+      engineOsc = AC.createOscillator(); engineOsc.type = 'sawtooth'; engineOsc.frequency.value = 55;
+      const filt = AC.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 420;
+      engineGain = AC.createGain(); engineGain.gain.value = 0;
+      engineOsc.connect(filt); filt.connect(engineGain); engineGain.connect(AC.destination);
+      engineOsc.start();
+    } catch (e) { AC = null; }
+  }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(freq, dur, type, vol, when) {
+  if (!AC || muted) return;
+  const t = AC.currentTime + (when || 0);
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type || 'square'; o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(vol || 0.12, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + dur + 0.02);
+}
+function noiseBurst(dur, vol) {
+  if (!AC || muted) return;
+  const len = Math.floor(AC.sampleRate * dur);
+  const buf = AC.createBuffer(1, len, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = AC.createBufferSource(); src.buffer = buf;
+  const g = AC.createGain(); g.gain.value = vol || 0.25;
+  src.connect(g); g.connect(AC.destination); src.start();
+}
+const sfx = {
+  click()  { tone(660, 0.07, 'square', 0.10); },
+  crash()  { noiseBurst(0.28, 0.30); tone(90, 0.25, 'sawtooth', 0.18); },
+  boost()  { if (!AC || muted) return; const t = AC.currentTime;
+             const o = AC.createOscillator(), g = AC.createGain();
+             o.type = 'sine'; o.frequency.setValueAtTime(220, t);
+             o.frequency.exponentialRampToValueAtTime(880, t + 0.28);
+             g.gain.setValueAtTime(0.16, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+             o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + 0.32); },
+  overtake(){ tone(880, 0.08, 'sine', 0.12); tone(1174, 0.12, 'sine', 0.12, 0.08); },
+  win()    { [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.22, 'square', 0.12, i * 0.13)); },
+  lose()   { [392, 330, 262, 196].forEach((f, i) => tone(f, 0.25, 'triangle', 0.12, i * 0.15)); },
+};
+// Original music: a simple upbeat loop (C-major pentatonic lead over a I–vi–IV–V bass).
+// Written for this game; no copyrighted melody.
+const LEAD = [523, 0, 659, 784, 0, 659, 587, 0, 523, 0, 587, 659, 0, 784, 880, 0];
+const BASS = [131, 131, 110, 110, 175, 175, 196, 196];
+let musicStep = 0;
+function startMusic() {
+  audio(); if (!AC || musicTimer) return;
+  musicStep = 0;
+  musicTimer = setInterval(() => {
+    if (muted || !AC || state !== 'playing') return;
+    const l = LEAD[musicStep % LEAD.length];
+    const b = BASS[Math.floor(musicStep / 2) % BASS.length];
+    if (l) tone(l, 0.16, 'triangle', 0.05);
+    if (musicStep % 2 === 0 && b) tone(b, 0.22, 'sine', 0.09);
+    musicStep++;
+  }, 170);
+}
+function stopMusic() { if (musicTimer) { clearInterval(musicTimer); musicTimer = null; } }
+
+// ---------- level config ----------
+function levelCfg(lv) {
+  return {
+    level: lv,
+    distance: 600 + lv * 30,                 // metres; L1=630, L20=1200
+    curveAmp: 26 + lv * 3.4,                 // px road sway, grows
+    curveFreq: 0.0016 + lv * 0.00006,
+    spawnEvery: Math.max(0.55, 1.15 - lv * 0.035), // seconds between obstacles
+    barrierChance: Math.min(0.55, 0.22 + lv * 0.016),
+    rivalSpeed: 14.5 + lv * 0.55,            // m/s
+    maxSpeed: Math.min(34, 26 + lv * 0.4),
+  };
+}
+function roadCenter(dist, cfg) {
+  return W / 2
+    + Math.sin(dist * cfg.curveFreq) * cfg.curveAmp
+    + Math.sin(dist * cfg.curveFreq * 2.7 + 1.3) * cfg.curveAmp * 0.45;
+}
+
+// ---------- game state ----------
+let state = 'menu';           // menu | howto | playing | paused | levelDone | gameOver | win
+let level = 1, score = 0, lives = 3;
+let cfg = levelCfg(1);
+let dist = 0, speed = 0, playerOff = 0;   // playerOff = px offset from road centre
+let timeLeft = RACE_TIME, raceTime = 0;
+let obstacles = [], rivals = [], particles = [];
+let spawnT = 0, shake = 0, invuln = 0, boostT = 0, flashMsg = '', flashT = 0;
+let keys = {}, pointer = { down: false, x: W / 2 };
+let raceScore = 0, overtakes = 0, bonus = 0, scoreAtRaceStart = 0;
+let startedAt = 0;
+
+const RIVAL_DEFS = [
+  { color: '#e74c3c', name: 'Ruby' },
+  { color: '#3498db', name: 'Azure' },
+  { color: '#9b59b6', name: 'Violet' },
+];
+
+function resetRace(lv) {
+  level = lv; cfg = levelCfg(lv);
+  dist = 0; speed = 0; playerOff = 0;
+  timeLeft = RACE_TIME; raceTime = 0;
+  lives = 3; raceScore = 0; overtakes = 0; bonus = 0; scoreAtRaceStart = score;
+  obstacles = []; rivals = []; particles = [];
+  spawnT = 0.6; shake = 0; invuln = 0; boostT = 0; flashMsg = ''; flashT = 0;
+  // rivals start slightly ahead, each with own pace + wobble
+  rivals = RIVAL_DEFS.map((r, i) => ({
+    color: r.color, name: r.name,
+    dist: 40 + i * 35, speed: cfg.rivalSpeed * (0.94 + i * 0.05),
+    off: [-55, 20, 60][i], wob: Math.random() * 6.28, passed: false,
+  }));
+  document.getElementById('levelPill').textContent = 'RACE ' + lv + ' / 20';
+}
+
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+function hide(id) { document.getElementById(id).classList.add('hidden'); }
+function showOnly(id) {
+  ['menu', 'howto', 'levelDone', 'gameOver', 'winScreen', 'paused'].forEach(hide);
+  if (id) show(id);
+  document.getElementById('topbar').classList.toggle('hidden', !(state === 'playing' || state === 'paused'));
+}
+function toMenu() {
+  state = 'menu'; stopMusic(); if (engineGain) engineGain.gain.value = 0;
+  document.getElementById('bestScore').textContent = best.score;
+  document.getElementById('bestRace').textContent = best.race ? ('Race ' + best.race + ' / 20') : '—';
+  const cont = document.getElementById('continueBtn');
+  if (level > 1 && level <= TOTAL_LEVELS) { cont.style.display = 'block'; document.getElementById('contLvl').textContent = level; }
+  else cont.style.display = 'none';
+  document.getElementById('startBtn').textContent = '▶ START RACE 1';
+  showOnly('menu');
+}
+function startRace(lv) {
+  audio(); startMusic();
+  // retrying the same race (after game over / pause-restart) refunds the
+  // points earned in the failed attempt; a fresh next race keeps the total
+  if ((state === 'gameOver' || state === 'paused') && lv === level) score = scoreAtRaceStart;
+  resetRace(lv); state = 'playing'; startedAt = performance.now();
+  showOnly(null);
+}
+
+// ---------- spawning / update ----------
+function spawnObstacle() {
+  const ahead = dist + 620 + Math.random() * 120;   // metres ahead
+  const r = Math.random();
+  const off = (Math.random() * 2 - 1) * (ROAD_HALF - 42);
+  if (r < cfg.barrierChance) {
+    obstacles.push({ type: 'barrier', dist: ahead, off, angle: Math.random() * 3, spin: (1.6 + Math.random() * 1.6 + level * 0.06) * (Math.random() < 0.5 ? -1 : 1), hit: false });
+  } else if (r < cfg.barrierChance + 0.30) {
+    obstacles.push({ type: 'cone', dist: ahead, off, hit: false });
+  } else if (r < cfg.barrierChance + 0.45) {
+    obstacles.push({ type: 'ramp', dist: ahead, off: (Math.random() * 2 - 1) * (ROAD_HALF - 55), hit: false });
+  } else {
+    obstacles.push({ type: 'cone', dist: ahead, off: (Math.random() * 2 - 1) * (ROAD_HALF - 42), hit: false });
+  }
+}
+function burst(x, y, color, n) {
+  for (let i = 0; i < n; i++) particles.push({ x, y, vx: (Math.random() - 0.5) * 260, vy: (Math.random() - 0.5) * 260, life: 0.5 + Math.random() * 0.3, color });
+}
+function playerScreenX() { return roadCenter(dist, cfg) + playerOff; }
+
+function update(dt) {
+  if (state !== 'playing') return;
+  raceTime += dt; timeLeft -= dt;
+  if (timeLeft <= 0) { timeLeft = 0; return endRace(false, 'Time up! The clock beat you to the line.'); }
+
+  // --- input: hold to accelerate ---
+  const gas = keys['ArrowUp'] || keys[' '] || keys['w'] || keys['W'] || pointer.down;
+  const accel = boostT > 0 ? 34 : 22;
+  if (gas) speed += accel * dt; else speed -= 11 * dt;
+  const offRoad = Math.abs(playerOff) > ROAD_HALF - 26;
+  const maxSp = offRoad ? 12 : (boostT > 0 ? cfg.maxSpeed + 9 : cfg.maxSpeed);
+  speed = Math.max(0, Math.min(maxSp, speed));
+  if (boostT > 0) boostT -= dt;
+  if (invuln > 0) invuln -= dt;
+
+  // --- steering ---
+  let steer = 0;
+  if (keys['ArrowLeft'] || keys['a'] || keys['A']) steer -= 1;
+  if (keys['ArrowRight'] || keys['d'] || keys['D']) steer += 1;
+  if (pointer.down) {
+    const px = playerScreenX();
+    const dx = pointer.x - px;
+    if (Math.abs(dx) > 8) steer = Math.max(-1, Math.min(1, dx / 90));
+  }
+  playerOff += steer * (120 + speed * 2.6) * dt;
+  playerOff = Math.max(-ROAD_HALF - 46, Math.min(ROAD_HALF + 46, playerOff));
+
+  dist += speed * dt * 0.9;   // metres (scaled for feel)
+  raceScore = Math.floor(dist);
+  score = scoreAtRaceStart + raceScore + bonus;   // live score: distance + bonuses
+
+  // --- rivals ---
+  rivals.forEach(rv => {
+    rv.dist += rv.speed * dt;
+    rv.wob += dt * 0.9;
+    rv.off += Math.sin(rv.wob) * 14 * dt;
+    rv.off = Math.max(-ROAD_HALF + 30, Math.min(ROAD_HALF - 30, rv.off));
+    if (!rv.passed && dist > rv.dist + 15) { rv.passed = true; overtakes++; bonus += 100; sfx.overtake(); flash('OVERTAKE! +100'); }
+  });
+
+  // --- obstacles ---
+  spawnT -= dt;
+  if (spawnT <= 0) { spawnObstacle(); spawnT = cfg.spawnEvery * (0.8 + Math.random() * 0.5); }
+  const px = playerScreenX();
+  obstacles.forEach(o => {
+    if (o.type === 'barrier') o.angle += o.spin * dt;
+    const rel = (o.dist - dist);            // metres ahead of player
+    const sy = PLAYER_Y - rel * 2.1;         // screen y (2.1 px per metre)
+    const sx = roadCenter(o.dist, cfg) + o.off;
+    if (!o.hit && rel > -6 && rel < 6 && Math.abs(sx - px) < 42) {
+      o.hit = true;
+      if (o.type === 'ramp') {
+        boostT = 1.1; speed = Math.min(cfg.maxSpeed + 9, speed + 9);
+        bonus += 50; sfx.boost(); flash('RAMP BOOST! +50'); burst(px, PLAYER_Y - 20, '#ffd23f', 14);
+      } else {
+        lives--; shake = 14; invuln = 1.4; speed *= 0.45;
+        sfx.crash(); burst(px, PLAYER_Y - 10, '#ff6b35', 22);
+        flash(lives > 0 ? 'CRASH! -1 WRENCH' : 'CRASH!');
+        if (lives <= 0) { update(0); return endRace(false, 'Out of wrenches! Your car is wrecked.'); }
+      }
+    }
+  });
+  obstacles = obstacles.filter(o => (o.dist - dist) > -30);
+  particles = particles.filter(p => (p.life -= dt) > 0);
+  particles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; });
+
+  // --- finish ---
+  if (dist >= cfg.distance) {
+    const rivalsAhead = rivals.filter(rv => rv.dist >= cfg.distance || rv.dist > dist).length;
+    const pos = rivalsAhead + 1;
+    endRace(true, pos);
+  }
+  if (engineGain && AC) {
+    engineGain.gain.value = muted ? 0 : (state === 'playing' ? 0.02 + speed / cfg.maxSpeed * 0.045 : 0);
+    if (engineOsc) engineOsc.frequency.value = 50 + speed * 4.2;
+  }
+}
+function flash(msg) { flashMsg = msg; flashT = 1.4; }
+function endRace(won, arg) {
+  if (state !== 'playing') return;
+  state = won ? 'levelDone' : 'gameOver';
+  if (engineGain) engineGain.gain.value = 0;
+  if (won) {
+    const pos = arg;
+    const timeBonus = Math.max(0, Math.floor(timeLeft)) * 10;
+    const posBonus = pos === 1 ? 500 : pos === 2 ? 300 : pos === 3 ? 150 : 50;
+    const pts = raceScore + timeBonus + posBonus;
+    score += timeBonus + posBonus;   // distance + overtake/ramp bonuses already live in score
+    if (score > best.score) { best.score = score; best.race = level; saveBest(); }
+    sfx.win();
+    document.getElementById('ldTitle').textContent = pos === 1 ? '🏆 RACE WON!' : 'RACE COMPLETE!';
+    document.getElementById('ldStars').textContent = pos === 1 ? '★★★' : pos === 2 ? '★★☆' : '★☆☆';
+    document.getElementById('ldPos').textContent = ['1st', '2nd', '3rd', '4th'][pos - 1];
+    document.getElementById('ldTime').textContent = raceTime.toFixed(1) + 's';
+    document.getElementById('ldPts').textContent = pts;
+    document.getElementById('ldScore').textContent = score;
+    if (level >= TOTAL_LEVELS) {
+      document.getElementById('ldNext').textContent = 'That was the final race — you are the champion!';
+      document.getElementById('nextBtn').textContent = '🏁 CLAIM THE TROPHY';
+    } else {
+      document.getElementById('ldNext').textContent = 'Next: Race ' + (level + 1) + ' — faster rivals, twistier road.';
+      document.getElementById('nextBtn').textContent = 'NEXT RACE ▶';
+    }
+    showOnly('levelDone');
+  } else {
+    sfx.lose();
+    document.getElementById('goMsg').textContent = arg;
+    document.getElementById('goScore').textContent = score;
+    document.getElementById('goLevel').textContent = level;
+    showOnly('gameOver');
+  }
+}
+
+// ---------- drawing ----------
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function drawCar(x, y, color, isPlayer, angle) {
+  ctx.save(); ctx.translate(x, y); if (angle) ctx.rotate(angle);
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; roundRect(-19, -28, 38, 62, 8); ctx.fill();
+  // wheels
+  ctx.fillStyle = '#111';
+  [[-20, -22], [14, -22], [-20, 18], [14, 18]].forEach(p => { roundRect(p[0], p[1], 7, 16, 3); ctx.fill(); });
+  // body
+  ctx.fillStyle = color; roundRect(-16, -30, 32, 60, 9); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.25)'; roundRect(-16, -30, 32, 14, 9); ctx.fill();
+  // windshield + roof
+  ctx.fillStyle = '#bfe9ff'; roundRect(-12, -14, 24, 12, 4); ctx.fill();
+  ctx.fillStyle = color; roundRect(-12, 2, 24, 10, 4); ctx.fill();
+  // nose stripe / headlights
+  ctx.fillStyle = '#fff'; roundRect(-12, -29, 24, 4, 2); ctx.fill();
+  ctx.fillStyle = '#ffe45e'; ctx.beginPath(); ctx.arc(-9, -27, 3, 0, 7); ctx.arc(9, -27, 3, 0, 7); ctx.fill();
+  if (isPlayer) { ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Trebuchet MS'; ctx.textAlign = 'center'; ctx.fillText('1', 0, 26); }
+  ctx.restore();
+}
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  if (state === 'menu' || state === 'howto') { drawBackdrop(0, levelCfg(1)); drawTitleScene(); return; }
+  const shX = shake > 0 ? (Math.random() - 0.5) * shake : 0;
+  const shY = shake > 0 ? (Math.random() - 0.5) * shake : 0;
+  if (shake > 0) shake *= 0.86;
+  ctx.save(); ctx.translate(shX, shY);
+  drawBackdrop(dist, cfg);
+
+  // finish line
+  const finRel = cfg.distance - dist;
+  if (finRel > -10 && finRel < 340) {
+    const fy = PLAYER_Y - finRel * 2.1;
+    const cx = roadCenter(cfg.distance, cfg);
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 2; j++) {
+      ctx.fillStyle = (i + j) % 2 ? '#111' : '#fff';
+      ctx.fillRect(cx - ROAD_HALF + i * (ROAD_HALF * 2 / 8), fy + j * 9, ROAD_HALF * 2 / 8, 9);
+    }
+  }
+  // ramps / obstacles (far to near)
+  const sorted = obstacles.slice().sort((a, b) => b.dist - a.dist);
+  sorted.forEach(o => {
+    const rel = o.dist - dist; if (rel < -12 || rel > 340) return;
+    const sy = PLAYER_Y - rel * 2.1, sx = roadCenter(o.dist, cfg) + o.off;
+    if (o.type === 'ramp') {
+      ctx.fillStyle = '#ffd23f'; roundRect(sx - 30, sy - 18, 60, 36, 6); ctx.fill();
+      ctx.fillStyle = '#c0392b'; ctx.font = 'bold 22px Trebuchet MS'; ctx.textAlign = 'center';
+      ctx.fillText('▲▲', sx, sy + 8);
+    } else if (o.type === 'cone') {
+      ctx.fillStyle = '#ff6b35';
+      ctx.beginPath(); ctx.moveTo(sx, sy - 16); ctx.lineTo(sx + 13, sy + 12); ctx.lineTo(sx - 13, sy + 12); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.fillRect(sx - 9, sy - 2, 18, 5);
+      ctx.fillStyle = '#c0392b'; ctx.fillRect(sx - 14, sy + 12, 28, 5);
+    } else { // spinning barrier
+      ctx.save(); ctx.translate(sx, sy); ctx.rotate(o.angle);
+      ctx.fillStyle = '#e74c3c'; roundRect(-36, -8, 72, 16, 6); ctx.fill();
+      ctx.fillStyle = '#fff';
+      for (let i = -3; i < 4; i += 2) ctx.fillRect(i * 10, -8, 10, 16);
+      ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(0, 0, 6, 0, 7); ctx.fill();
+      ctx.restore();
+    }
+  });
+  // rivals
+  rivals.forEach(rv => {
+    const rel = rv.dist - dist; if (rel < -14 || rel > 340) return;
+    drawCar(roadCenter(rv.dist, cfg) + rv.off, PLAYER_Y - rel * 2.1, rv.color, false, Math.sin(rv.wob) * 0.06);
+  });
+  // player (blink while invulnerable)
+  if (!(invuln > 0 && Math.floor(invuln * 10) % 2 === 0)) {
+    drawCar(playerScreenX(), PLAYER_Y, '#f5c518', true, 0);
+    if (boostT > 0) { ctx.fillStyle = '#ff9f1c'; ctx.beginPath(); ctx.moveTo(playerScreenX() - 10, PLAYER_Y + 32); ctx.lineTo(playerScreenX(), PLAYER_Y + 58 + Math.random() * 14); ctx.lineTo(playerScreenX() + 10, PLAYER_Y + 32); ctx.closePath(); ctx.fill(); }
+  }
+  // speed lines when fast
+  if (speed > 24) {
+    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 2;
+    for (let i = 0; i < 6; i++) {
+      const lx = Math.random() * W, ly = Math.random() * H;
+      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx, ly + 26 + speed); ctx.stroke();
+    }
+  }
+  ctx.restore();
+  drawHUD();
+  if (flashT > 0) {
+    flashT -= 1 / 60;
+    ctx.fillStyle = 'rgba(255,210,63,' + Math.min(1, flashT) + ')';
+    ctx.font = 'bold 26px Trebuchet MS'; ctx.textAlign = 'center';
+    ctx.fillText(flashMsg, W / 2, 210);
+  }
+  if (state === 'playing' && timeLeft < 10) {
+    ctx.fillStyle = timeLeft < 5 ? '#ff5252' : '#ffd23f';
+    ctx.font = 'bold 22px Trebuchet MS'; ctx.textAlign = 'center';
+    ctx.fillText('⏱ ' + Math.ceil(timeLeft) + 's', W / 2, 120);
+  }
+}
+function drawBackdrop(d, c) {
+  // grass
+  ctx.fillStyle = '#2f7a3d'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(255,255,255,.05)';
+  for (let i = 0; i < 24; i++) {
+    const gy = ((i * 97 - d * 14) % (H + 40) + H + 40) % (H + 40) - 20;
+    ctx.fillRect((i * 137) % W, gy, 26, 10);
+  }
+  // road: draw in horizontal slices from far (top) to near (bottom)
+  const slices = 36;
+  for (let i = slices; i >= 0; i--) {
+    const rel = i * 9.4;                       // metres ahead of player at this slice
+    const yTop = PLAYER_Y - (rel + 9.4) * 2.1, yBot = PLAYER_Y - rel * 2.1;
+    const cTop = roadCenter(d + rel + 9.4, c), cBot = roadCenter(d + rel, c);
+    ctx.fillStyle = '#3a3f46';
+    ctx.beginPath(); ctx.moveTo(cTop - ROAD_HALF, yTop); ctx.lineTo(cTop + ROAD_HALF, yTop);
+    ctx.lineTo(cBot + ROAD_HALF, yBot); ctx.lineTo(cBot - ROAD_HALF, yBot); ctx.closePath(); ctx.fill();
+    // edge lines + centre dashes
+    ctx.fillStyle = '#f5f5f5';
+    ctx.fillRect(cTop - ROAD_HALF + 2, yTop, 4, Math.max(1, yBot - yTop));
+    ctx.fillRect(cTop + ROAD_HALF - 6, yTop, 4, Math.max(1, yBot - yTop));
+    if (Math.floor((d + rel) / 18) % 2 === 0) {
+      ctx.fillStyle = '#ffd23f'; ctx.fillRect(cBot - 3, yTop, 6, Math.max(1, yBot - yTop));
+    }
+  }
+  // roadside posts
+  ctx.fillStyle = '#e74c3c';
+  for (let m = 0; m < 340; m += 34) {
+    const dd = d + m - (d % 34);
+    const y = PLAYER_Y - (dd - d) * 2.1;
+    const cx = roadCenter(dd, c);
+    ctx.fillRect(cx - ROAD_HALF - 12, y, 6, 12); ctx.fillRect(cx + ROAD_HALF + 6, y, 6, 12);
+  }
+}
+function drawTitleScene() {
+  // a parked hero car + a rival on the menu backdrop
+  drawCar(W / 2 - 70, 520, '#f5c518', true, -0.06);
+  drawCar(W / 2 + 80, 470, '#e74c3c', false, 0.05);
+  ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = 'bold 17px Trebuchet MS'; ctx.textAlign = 'center';
+  ctx.fillText('Hold to go. Steer to survive.', W / 2, 640);
+}
+function drawHUD() {
+  ctx.textAlign = 'left';
+  // top-left panel
+  ctx.fillStyle = 'rgba(0,0,0,.55)'; roundRect(10, 58, 150, 66, 10); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 15px Trebuchet MS';
+  ctx.fillText('SPEED ' + Math.round(speed * 3.6) + ' km/h', 20, 80);
+  ctx.fillText('SCORE ' + score, 20, 102);
+  ctx.fillStyle = '#ffd23f'; ctx.fillText('TIME ' + Math.ceil(timeLeft) + 's', 20, 120 - 2);
+  // wrenches (lives) top-right
+  ctx.textAlign = 'right'; ctx.font = 'bold 22px Trebuchet MS';
+  let w = '';
+  for (let i = 0; i < 3; i++) w += (i < lives ? '🔧' : '·');
+  ctx.fillText(w, W - 14, 82);
+  ctx.font = 'bold 14px Trebuchet MS'; ctx.fillStyle = '#fff';
+  const pos = 1 + rivals.filter(rv => rv.dist > dist).length;
+  ctx.fillText('POS ' + pos + '/4', W - 14, 106);
+  // progress bar (distance to finish)
+  const pct = Math.min(1, dist / cfg.distance);
+  ctx.fillStyle = 'rgba(0,0,0,.55)'; roundRect(60, H - 26, W - 120, 14, 7); ctx.fill();
+  ctx.fillStyle = '#37e08b'; roundRect(60, H - 26, (W - 120) * pct, 14, 7); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Trebuchet MS'; ctx.textAlign = 'center';
+  ctx.fillText(Math.floor(dist) + 'm / ' + cfg.distance + 'm', W / 2, H - 32);
+  // rival markers on the progress bar
+  rivals.forEach(rv => {
+    const rp = Math.min(1, rv.dist / cfg.distance);
+    ctx.fillStyle = rv.color; ctx.beginPath(); ctx.arc(60 + (W - 120) * rp, H - 19, 4, 0, 7); ctx.fill();
+  });
+  ctx.fillStyle = '#f5c518'; ctx.beginPath(); ctx.arc(60 + (W - 120) * pct, H - 19, 5, 0, 7); ctx.fill();
+}
+
+// ---------- main loop ----------
+// rAF is the primary driver (60fps on real devices). Some headless/background
+// environments throttle rAF to ~1fps, so a watchdog steps the game whenever
+// no frame has run for >120ms — the game then advances in real time there too.
+let lastT = performance.now();
+let lastFrame = lastT;
+function step(t) {
+  const dt = Math.max(0, Math.min(0.05, (t - lastT) / 1000)); lastT = t; lastFrame = t;
+  if (state === 'playing') update(dt);
+  draw();
+}
+function loop(t) { step(t); requestAnimationFrame(loop); }
+setInterval(() => {
+  const now = performance.now();
+  if (now - lastFrame > 120) step(now);
+}, 50);
+function fit() {
+  const s = Math.min(window.innerWidth / W, window.innerHeight / H);
+  canvas.style.width = (W * s) + 'px'; canvas.style.height = (H * s) + 'px';
+}
+window.addEventListener('resize', fit);
+
+// ---------- input ----------
+window.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+  if (e.key === 'p' || e.key === 'P') togglePause();
+  if (e.key === 'm' || e.key === 'M') toggleMute();
+  if (e.key === 'Enter' && state === 'menu') startRace(1);
+});
+window.addEventListener('keyup', e => { keys[e.key] = false; });
+function canvasPos(e) {
+  const r = canvas.getBoundingClientRect();
+  const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+  return (cx - r.left) / r.width * W;
+}
+canvas.addEventListener('pointerdown', e => { if (state === 'playing') { pointer.down = true; pointer.x = canvasPos(e); audio(); } });
+window.addEventListener('pointermove', e => { if (pointer.down) pointer.x = canvasPos(e); });
+window.addEventListener('pointerup', () => { pointer.down = false; });
+window.addEventListener('pointercancel', () => { pointer.down = false; });
+
+function togglePause() {
+  if (state === 'playing') { state = 'paused'; if (engineGain) engineGain.gain.value = 0; showOnly('paused'); }
+  else if (state === 'paused') { state = 'playing'; showOnly(null); }
+}
+function toggleMute() {
+  muted = !muted;
+  document.getElementById('muteBtn').innerHTML = muted ? '&#128263;' : '&#128266;';
+  if (engineGain) engineGain.gain.value = muted ? 0 : 0.03;
+}
+
+// ---------- buttons ----------
+document.getElementById('startBtn').addEventListener('click', () => { sfx.click(); startRace(1); });
+document.getElementById('continueBtn').addEventListener('click', () => { sfx.click(); startRace(level); });
+document.getElementById('howBtn').addEventListener('click', () => { sfx.click(); state = 'howto'; showOnly('howto'); });
+document.getElementById('howBackBtn').addEventListener('click', () => { sfx.click(); startRace(1); });
+document.getElementById('nextBtn').addEventListener('click', () => {
+  sfx.click();
+  if (level >= TOTAL_LEVELS) {
+    state = 'win'; document.getElementById('winScore').textContent = score; showOnly('winScreen'); sfx.win();
+  } else startRace(level + 1);
+});
+document.getElementById('retryBtn').addEventListener('click', () => { sfx.click(); startRace(level); });
+document.getElementById('ldMenuBtn').addEventListener('click', () => { sfx.click(); toMenu(); });
+document.getElementById('goMenuBtn').addEventListener('click', () => { sfx.click(); toMenu(); });
+document.getElementById('winMenuBtn').addEventListener('click', () => { sfx.click(); toMenu(); });
+document.getElementById('againBtn').addEventListener('click', () => { sfx.click(); score = 0; startRace(1); });
+document.getElementById('pauseBtn').addEventListener('click', () => { sfx.click(); togglePause(); });
+document.getElementById('muteBtn').addEventListener('click', () => { audio(); toggleMute(); });
+document.getElementById('resumeBtn').addEventListener('click', () => { sfx.click(); togglePause(); });
+document.getElementById('restartBtn').addEventListener('click', () => { sfx.click(); startRace(level); });
+document.getElementById('pauseMenuBtn').addEventListener('click', () => { sfx.click(); toMenu(); });
+
+// ---------- test hooks (read-only state + a debug warp used only by headless tests) ----------
+window.__game = {
+  get state() { return state; }, get level() { return level; }, get score() { return score; },
+  get lives() { return lives; }, get dist() { return dist; }, get speed() { return speed; },
+  get timeLeft() { return timeLeft; }, get obstacles() { return obstacles.length; },
+  get rivals() { return rivals.length; },
+  warpNearFinish() { dist = cfg.distance - 12; },
+  setLives(n) { lives = n; },
+  // test-only: drop a real obstacle on the player's current spot so the
+  // genuine collision path runs (used by headless tests, not by gameplay)
+  spawnAtPlayer(type) { obstacles.push({ type: type || 'barrier', dist: dist + 2, off: playerOff, angle: 0, spin: 2, hit: false }); },
+  // test-only: advance the real update()+draw() by dt seconds. Lets headless
+  // tests step the simulation deterministically, since this VM's headless
+  // Chromium throttles rAF to ~1fps and timers under load.
+  step(dt) { if (state === 'playing') { update(dt); draw(); } return { dist, speed, score, lives, state }; },
+};
+fit(); toMenu(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>
